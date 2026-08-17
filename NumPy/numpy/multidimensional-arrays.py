@@ -10,4 +10,4 @@ array = np.array([[['A','B','C'],['D','E','F'],['G','H','I']],
 # print(array[2,1,0])  # multidimensional index
 
 word = array[1,0,0] + array[1,1,2] + array[0,0,1]
-print(word)
+print(word) 
