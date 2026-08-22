@@ -42,5 +42,3 @@ response2 = chain_memory.invoke(
 
 print(f"response 2 : {response2.content}")
 print("-" * 30)
-
-
