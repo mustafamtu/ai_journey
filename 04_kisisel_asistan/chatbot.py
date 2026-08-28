@@ -134,7 +134,7 @@ class ChatbotManager:
         """
         Bir oturumdaki mesaj geçmişini döner.
         """
-        history = self._get_session_history(session_id)
+        history = self.get_session_history(session_id)
         return history.messages
 
     def chat(self, session_id:str, query: str) -> str:
