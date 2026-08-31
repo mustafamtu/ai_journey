@@ -1,7 +1,7 @@
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-dosya_adi = "kullanim_kilavuzu.pdf"  # Dosya adındaki ı/i harfine dikkat
+dosya_adi = "kullanim_kilavuzu.pdf"
 
 loader = PyPDFLoader(dosya_adi)
 docs = loader.load()
