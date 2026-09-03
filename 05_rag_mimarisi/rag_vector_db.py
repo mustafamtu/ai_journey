@@ -13,8 +13,8 @@ loader = PyPDFLoader(dosya_adi)
 docs = loader.load()
 
 splitter = RecursiveCharacterTextSplitter(
-    chunk_size=100,
-    chunk_overlap=20,
+    chunk_size=500,
+    chunk_overlap=50,
 )
 
 parcalar = splitter.split_documents(docs)
