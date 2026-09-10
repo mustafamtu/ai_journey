@@ -1,7 +1,7 @@
 import sqlite3
 import uuid
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import GoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
@@ -11,16 +11,17 @@ from langchain_community.chat_message_histories import SQLChatMessageHistory
 load_dotenv()
 
 class ChatbotManager:
-    def __init__(self, model_name: str = "gpt-4o-mini", db_path: str = "history.db"):
+    def __init__(self, model_name: str = "gemini-2.5-flash", db_path: str = "history.db"):
         """
         Chatbot yöneticisini başlatır.
-        :param model_name: Kullanıcılacak OPENAI modeli (Varsayılan: gpt-4o-mini)
+        :param model_name: Kullanıcılacak GEMINI modeli (Varsayılan: gemini-2.5-flash)
         :param db_path: Geçmişin tutulacağı veritabanı yolu
         """
         self.model_name = model_name
         self.db_file_path = db_path
         self.connection_str = f"sqlite:///{db_path}"
-        self.LLM = ChatOpenAI(model=self.model_name)
+        self.LLM = GoogleGenerativeAI(model=self.model_name)
+        self.embedding_model=GoogleGenerativeAIEmbeddings
 
         self._init_session_db()
 
