@@ -7,6 +7,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import SQLChatMessageHistory
+from langchain_chroma import Chroma
 
 load_dotenv()
 
@@ -21,7 +22,13 @@ class ChatbotManager:
         self.db_file_path = db_path
         self.connection_str = f"sqlite:///{db_path}"
         self.LLM = GoogleGenerativeAI(model=self.model_name)
-        self.embedding_model=GoogleGenerativeAIEmbeddings
+        self.embedding_model=GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+
+        persist_directory = "./chroma_db_veri"
+        self.vectorstore = Chroma(
+            persist_directory=persist_directory,
+            embedding_function=self.embedding_model
+        )
 
         self._init_session_db()
 
