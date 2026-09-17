@@ -8,6 +8,7 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_chroma import Chroma
+from operator import itemgetter
 
 load_dotenv()
 
@@ -22,13 +23,15 @@ class ChatbotManager:
         self.db_file_path = db_path
         self.connection_str = f"sqlite:///{db_path}"
         self.LLM = GoogleGenerativeAI(model=self.model_name)
-        self.embedding_model=GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+        self.embedding_model = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2")
 
         persist_directory = "./chroma_db_veri"
         self.vectorstore = Chroma(
             persist_directory=persist_directory,
             embedding_function=self.embedding_model
         )
+
+        self.retriever = self.vectorstore.as_retriever(search_kwargs={"k":3})
 
         self._init_session_db()
 
@@ -65,6 +68,10 @@ class ChatbotManager:
             connection=self.connection_str
         )
 
+    def _format_docs(self, docs):
+        return "\n\n".join([d.page_content for d in docs])
+
+
     def _create_chain(self):
         """
         Prompt ve LLM'i birleştiren hafızalı zinciri oluşturur.
@@ -76,14 +83,13 @@ class ChatbotManager:
             ("human", "{soru}")
         ])
 
-        chain = prompt | self.LLM
-
-        return RunnableWithMessageHistory(
-            chain,
-            self._get_session_history,
-            input_messages_key="soru",
-            history_messages_key="gecmis"
+        chain = (
+            itemgetter("soru")
+            | self.retriever
+            | self._format_docs  
         )
+
+        return chain
     
     def create_session(self, user_id: str, title: str ="Yeni Sohbet") ->  str:
         """
@@ -147,7 +153,7 @@ class ChatbotManager:
                 config=config
             )
 
-            return response.content
+            return response
         except Exception as e:
             return f"Bir hata oluştu: {str(e)}"
         
@@ -159,7 +165,7 @@ class ChatbotManager:
                 {"soru": query},
                 config=config
             ):
-                yield chunk.content
+                yield chunk
         except Exception as e:
             return f"Bir hata oluştu: {str(e)}"
 
@@ -169,12 +175,6 @@ if __name__ == "__main__":
 
     user = "sadikturan"
 
-    sessions = bot.list_sessions(user)
+    session_id = bot.create_session(user, "Retriever Testi")
+    print(bot.chat(session_id, "Kişisel verilerin işlenmesindeki genel ilkeler nelerdir?"))
 
-    if not sessions:
-        session_id = bot.create_session(user, title="Python Dersleri Hakkında")
-        print(session_id)
-    else:
-        print(f"Bulunan sohbet sayısı: {len(sessions)}")
-        session_id = sessions[0]['session_id'] #en son sohbet
-        print(session_id)
