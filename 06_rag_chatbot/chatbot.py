@@ -9,6 +9,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_chroma import Chroma
 from operator import itemgetter
+from langchain_core.output_parsers import StrOutputParser
 
 load_dotenv()
 
@@ -73,23 +74,38 @@ class ChatbotManager:
 
 
     def _create_chain(self):
-        """
-        Prompt ve LLM'i birleştiren hafızalı zinciri oluşturur.
+        system_prompt = """
+        Sen uzman bir KVKK asistanısın.
+        Kullanıcının sorusunu cevaplamak için 
+        öncelikle aşağıdaki BAĞLAM (Context) bilgisini kullan
+        Eğer bağlamda cevap yoksa üzülerek dökümanda bulamadığını söyle ve asla uydurma cevap verme.
+
+        Bağlam:
+        {context}
         """
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "Sen yardımsever bir asistansın."),
+            ("system", system_prompt),
             MessagesPlaceholder(variable_name="gecmis"),
             ("human", "{soru}")
         ])
 
         chain = (
-            itemgetter("soru")
-            | self.retriever
-            | self._format_docs  
+            {
+                "context": itemgetter("soru") | self.retriever | self._format_docs,
+                "soru": itemgetter("soru"),
+                "gecmis": itemgetter("gecmis")
+            }
+            | prompt
+            | self.LLM
         )
 
-        return chain
+        return RunnableWithMessageHistory(
+            chain,
+            self._get_session_history,
+            input_messages_key="soru",
+            history_messages_key="gecmis"
+        )
     
     def create_session(self, user_id: str, title: str ="Yeni Sohbet") ->  str:
         """
