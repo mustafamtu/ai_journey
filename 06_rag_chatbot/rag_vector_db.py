@@ -1,3 +1,4 @@
+import time
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -6,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-dosya_adi = "kullanim_kilavuzu.pdf"
+dosya_adi = "kvkk.pdf"
 
 loader = PyPDFLoader(dosya_adi)
 docs = loader.load()
@@ -17,18 +18,34 @@ splitter = RecursiveCharacterTextSplitter(
 )
 
 parcalar = splitter.split_documents(docs)
+print(f"Toplam {len(parcalar)} parça oluşturuldu.")
 
 embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004"
+    model="models/gemini-embedding-2"
 )
 
 persist_directory = "./chroma_db_veri"
-print("Vektör Veritabanı oluşturuluyor...")
+print("Vektör Veritabanı hazırlanıyor...")
 
-vectorstore = Chroma.from_documents(
-    documents=parcalar,
-    embedding=embeddings,
+vectorstore = Chroma(
     persist_directory=persist_directory,
+    embedding_function=embeddings
 )
 
-print(f"Başarılı! Veriler {persist_directory} klasörüne kaydedildi.")
+batch_size = 20
+i = 0
+while i < len(parcalar):
+    batch = parcalar[i:i + batch_size]
+    try:
+        vectorstore.add_documents(documents=batch)
+        print(f"{min(i + batch_size, len(parcalar))}/{len(parcalar)} parça yüklendi...")
+        i += batch_size
+        time.sleep(1) 
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            print("Dakikalık 100 limitine çarpıldı. 30 saniye bekleniyor...")
+            time.sleep(30) 
+        else:
+            raise e
+
+print(f"Tebrikler! Tüm veriler {persist_directory} klasörüne eksiksiz kaydedildi.")

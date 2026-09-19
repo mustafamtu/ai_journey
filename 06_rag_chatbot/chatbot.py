@@ -1,5 +1,6 @@
 import sqlite3
 import uuid
+from click import prompt
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -10,6 +11,8 @@ from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_chroma import Chroma
 from operator import itemgetter
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnablePassthrough
 
 load_dotenv()
 
@@ -74,6 +77,19 @@ class ChatbotManager:
 
 
     def _create_chain(self):
+
+        # Aşama 1: Sorguyu tekrar yazma
+        rephrase_system = """
+
+        Sohbet geçmişini ve son kullanıcı sorusunu dikkate al
+        Eğer kullanıcı "bunu", "şunu", "o süreyi", "bu durumda" gibi önceki sohbete atıfta bulunan ifadeler kullanıyor ise 
+        soruyu tek başına anlaşılır, tam bir arama cümlesine dönüştür.
+
+        Eğer soru zaten netse 
+        Örneğin: "KVKK Nedir?"
+        soruyu aynen bırak ASLA cevap verme, sadece düzeltilmiş soruyu çıktı olarak ver.
+        """
+        # Aşama 2: Cevap üretme
         system_prompt = """
         Sen uzman bir KVKK asistanısın.
         Kullanıcının sorusunu cevaplamak için 
@@ -84,20 +100,31 @@ class ChatbotManager:
         {context}
         """
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
+        rephrase_prompt = ChatPromptTemplate.from_messages([
+            ("system", rephrase_system),
             MessagesPlaceholder(variable_name="gecmis"),
             ("human", "{soru}")
         ])
 
+        rephrase_chain = rephrase_prompt | self.LLM | StrOutputParser()
+
+        
+
+        def inspect_query(query):
+            print("Retriever'a gönderilen sorgu:", query)
+            return query
+        
         chain = (
-            {
-                "context": itemgetter("soru") | self.retriever | self._format_docs,
-                "soru": itemgetter("soru"),
-                "gecmis": itemgetter("gecmis")
-            }
+            RunnablePassthrough.assign(
+                search_query = rephrase_chain
+            )
+            |
+            RunnablePassthrough.assign(
+                context = itemgetter("search_query") | RunnableLambda(inspect_query) | self.retriever | self._format_docs,
+            )
             | prompt
             | self.LLM
+            | StrOutputParser()
         )
 
         return RunnableWithMessageHistory(
@@ -189,8 +216,10 @@ class ChatbotManager:
 if __name__ == "__main__":
     bot = ChatbotManager()
 
-    user = "sadikturan"
+    user = "mustafamutlu"
 
     session_id = bot.create_session(user, "Retriever Testi")
-    print(bot.chat(session_id, "Kişisel verilerin işlenmesindeki genel ilkeler nelerdir?"))
+    print(bot.chat(session_id, "Açık Rıza nedir?"))
+    print(bot.chat(session_id, "Bu dediğini bir dha açıklar mısın?"))
+
 
