@@ -12,7 +12,8 @@ from langchain_chroma import Chroma
 from operator import itemgetter
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableLambda
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableBranch
+
 
 load_dotenv()
 
@@ -75,58 +76,109 @@ class ChatbotManager:
     def _format_docs(self, docs):
         return "\n\n".join([d.page_content for d in docs])
 
+    def _get_router_chain(self):
+        router_system = """
+        Sen bir sınıflandırma asistanısın. Sana gelen soruyu analiz et.
 
-    def _create_chain(self):
+        KURALLAR:
+        1- Eğer soru KVKK, Kanun, Cezalar, Veriler, Rıza gibi teknik ve hukuki konularla ilgiliyse => "RAG" yaz.
+        2- Eğer soru genel sohbet, selamlaşma, kişisel sorular içeriyorsa => "CHAT" yaz.
 
-        # Aşama 1: Sorguyu tekrar yazma
+        SADECE tek bir kelime ile cevap ver ("RAG" veya "CHAT"). Başka hiçbir şey yazma.
+        """
+
+        router_prompt = ChatPromptTemplate.from_messages([
+            ("system", router_system),
+            ("human", "{soru}")
+        ])
+
+        return router_prompt | self.LLM | StrOutputParser()
+    
+    def _get_chat_chain(self):
+          prompt = ChatPromptTemplate.from_messages([
+            ("system", "Sen nazik bir asistansın. Kullanıcı ile sohbet et."),
+            MessagesPlaceholder(variable_name="gecmis"),
+            ("human", "{soru}")
+            ])
+          return prompt | self.LLM | StrOutputParser()
+        
+
+    def _get_rag_chain(self):
         rephrase_system = """
-
+        
         Sohbet geçmişini ve son kullanıcı sorusunu dikkate al
         Eğer kullanıcı "bunu", "şunu", "o süreyi", "bu durumda" gibi önceki sohbete atıfta bulunan ifadeler kullanıyor ise 
         soruyu tek başına anlaşılır, tam bir arama cümlesine dönüştür.
-
+        
         Eğer soru zaten netse 
         Örneğin: "KVKK Nedir?"
         soruyu aynen bırak ASLA cevap verme, sadece düzeltilmiş soruyu çıktı olarak ver.
         """
+        
+        
         # Aşama 2: Cevap üretme
         system_prompt = """
         Sen uzman bir KVKK asistanısın.
         Kullanıcının sorusunu cevaplamak için 
         öncelikle aşağıdaki BAĞLAM (Context) bilgisini kullan
         Eğer bağlamda cevap yoksa üzülerek dökümanda bulamadığını söyle ve asla uydurma cevap verme.
-
+        
         Bağlam:
         {context}
         """
-
+        
         rephrase_prompt = ChatPromptTemplate.from_messages([
-            ("system", rephrase_system),
-            MessagesPlaceholder(variable_name="gecmis"),
-            ("human", "{soru}")
-        ])
-
+                    ("system", rephrase_system),
+                    MessagesPlaceholder(variable_name="gecmis"),
+                    ("human", "{soru}")
+                ])
         rephrase_chain = rephrase_prompt | self.LLM | StrOutputParser()
-
+    
+                
         
-
         def inspect_query(query):
-            print("Retriever'a gönderilen sorgu:", query)
-            return query
+                    print("Retriever'a gönderilen sorgu:", query)
+                    return query
+                
+        return (
+        RunnablePassthrough.assign(
+            search_query = rephrase_chain
+        )
+        |
+        RunnablePassthrough.assign(
+        context = itemgetter("search_query") | RunnableLambda(inspect_query) | self.retriever | self._format_docs,
+        )
+        | prompt
+        | self.LLM
+        | StrOutputParser()
+        )
         
-        chain = (
-            RunnablePassthrough.assign(
-                search_query = rephrase_chain
-            )
-            |
-            RunnablePassthrough.assign(
-                context = itemgetter("search_query") | RunnableLambda(inspect_query) | self.retriever | self._format_docs,
-            )
-            | prompt
-            | self.LLM
-            | StrOutputParser()
+
+
+    def _create_chain(self):
+
+        # Aşama 1: Parçaların hazırlanması  
+        
+        
+          
+        router_chain = self._get_router_chain()
+        chat_chain = self._get_chat_chain()
+        rag_chain = self._get_rag_chain()
+
+        # Aşama 2: Karar Mekanizması (Dallanma/Branch)
+
+        branch = RunnableBranch(
+            (lambda x: "RAG" in x["topic"], rag_chain),
+            chat_chain
         )
 
+        # Aşama 3: Zincir montajı
+
+        chain = RunnablePassthrough.assign(topic=router_chain) | branch
+    
+
+
+        
         return RunnableWithMessageHistory(
             chain,
             self._get_session_history,
@@ -219,7 +271,10 @@ if __name__ == "__main__":
     user = "mustafamutlu"
 
     session_id = bot.create_session(user, "Retriever Testi")
+    # print(bot.chat(session_id, "Açık Rıza nedir?"))
+    # print(bot.chat(session_id, "Bu dediğini bir dha açıklar mısın?"))
+    print(bot.chat(session_id, "Merhaba, Nasılsın?"))
     print(bot.chat(session_id, "Açık Rıza nedir?"))
-    print(bot.chat(session_id, "Bu dediğini bir dha açıklar mısın?"))
+    
 
 
