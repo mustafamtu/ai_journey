@@ -156,6 +156,9 @@ class ChatbotManager:
 
 
     def _create_chain(self):
+        """
+        Router mimarisi ile kullanıcıyı gereken yapıya götüren fonksiyon
+        """
 
         # Aşama 1: Parçaların hazırlanması  
         
