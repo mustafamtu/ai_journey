@@ -36,9 +36,3 @@ Dış araçları (Tools) kullanabilen, karar alabilen ve karmaşık görevleri o
 
 ---
 
-## 🛠️ Kurulum ve Çalıştırma
-
-### 1. Depoyu Klonlayın
-```bash
-git clone [https://github.com/KULLANICI_ADI/PROJECT_NAME.git](https://github.com/KULLANICI_ADI/PROJECT_NAME.git)
-cd PROJECT_NAME
